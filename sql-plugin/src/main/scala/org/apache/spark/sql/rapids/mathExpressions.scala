@@ -26,7 +26,7 @@ import com.nvidia.spark.rapids.jni.{Arithmetic, CastStrings, ExceptionWithRowInd
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, ImplicitCastInputTypes}
 import org.apache.spark.sql.catalyst.trees.CurrentOrigin
-import org.apache.spark.sql.rapids.shims.{OriginContextShim, RapidsErrorUtils}
+import org.apache.spark.sql.rapids.shims.{HashUtils, OriginContextShim, RapidsErrorUtils}
 import org.apache.spark.sql.types._
 
 abstract class CudfUnaryMathExpression(name: String) extends GpuUnaryMathExpression(name)
@@ -810,10 +810,13 @@ abstract class GpuRoundBase(
         }
       }
     } else if (scale >= maxDigits) {
-      // just returns the original values
-      lhs.incRefCount()
+      // Spark normalizes floating point -0.0 to +0.0 even when the requested
+      // scale is large enough that no other rounding is required.
+      HashUtils.normalizeInput(lhs)
     } else {
-      Arithmetic.round(lhs, scale, roundMode)
+      withResource(Arithmetic.round(lhs, scale, roundMode)) { rounded =>
+        HashUtils.normalizeInput(rounded)
+      }
     }
   }
 
