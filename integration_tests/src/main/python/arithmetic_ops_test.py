@@ -15,7 +15,7 @@
 from logging import exception
 import pytest
 
-from asserts import assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_error, assert_gpu_fallback_collect, assert_gpu_and_cpu_are_equal_sql
+from asserts import assert_equal_with_signed_zero, assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_error, assert_gpu_fallback_collect, assert_gpu_and_cpu_are_equal_sql
 from data_gen import *
 from marks import ignore_order, incompat, approximate_float, allow_non_gpu, allow_non_gpu_conditional, datagen_overrides, disable_ansi_mode
 from pyspark.sql.types import *
@@ -783,6 +783,21 @@ def test_decimal_round(data_gen):
                 'round(a, 2)',
                 'round(a, 10)'))
 
+
+
+def test_round_normalizes_negative_zero():
+    def do_round(spark):
+        return spark.createDataFrame(
+            [(-2.0633452147848027e-23,)], ["a"]
+        ).selectExpr(
+            "round(a, 11)",
+            "bround(a, 11)"
+        ).collect()
+
+    assert_equal_with_signed_zero(
+        with_cpu_session(do_round),
+        with_gpu_session(do_round)
+    )
 
 @incompat
 @approximate_float
